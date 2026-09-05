@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 
 // Turns data/timing-worksheet.csv into src/data/songs.json — the real data
 // the app actually runs on. Only rows with a timestamp are included; a song
@@ -44,6 +44,15 @@ function slugify(title) {
     .replace(/^-+|-+$/g, "");
 }
 
+// title -> genius.com URL, for the "genius" easter-egg button. Missing
+// entirely (data/genius-catalog.json not regenerated) just means no link.
+const geniusUrlByTitle = new Map();
+if (existsSync("data/genius-catalog.json")) {
+  for (const s of JSON.parse(readFileSync("data/genius-catalog.json", "utf8"))) {
+    geniusUrlByTitle.set(s.title, s.geniusUrl);
+  }
+}
+
 const csvRows = parseCsv(readFileSync("data/timing-worksheet.csv", "utf8"));
 const header = csvRows[0];
 const rows = csvRows.slice(1).map((r) => Object.fromEntries(header.map((h, i) => [h, r[i] ?? ""])));
@@ -63,6 +72,7 @@ const songs = [...bySong.entries()].map(([title, songRows]) => {
     album: first.album || undefined,
     year: first.year ? Number(first.year) : undefined,
     youtubeId: extractVideoId(first.youtube_url),
+    geniusUrl: geniusUrlByTitle.get(title),
     lines: songRows.map((r) => ({
       timestamp: parseTimestamp(r.timestamp),
       text: r.line_text,

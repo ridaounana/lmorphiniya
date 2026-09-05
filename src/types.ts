@@ -15,6 +15,7 @@ export interface Song {
    * "connect a real link" placeholder instead of an embed.
    */
   youtubeId?: string;
+  geniusUrl?: string;
   lines: LyricLine[];
 }
 
@@ -25,6 +26,7 @@ export interface UntimedSong {
   album?: string;
   year?: number;
   youtubeId?: string;
+  geniusUrl?: string;
   lines: string[];
 }
 

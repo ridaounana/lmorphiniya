@@ -46,6 +46,7 @@ for (const song of catalog) {
     album: details?.album?.trim() || undefined,
     year: song.year ?? undefined,
     youtubeId: extractVideoId(details?.youtubeUrl),
+    geniusUrl: song.geniusUrl,
     lines: realLines,
   });
 }
