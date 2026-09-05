@@ -45,6 +45,8 @@
   button:hover { background: #4a3e34; }
   button:disabled { opacity: 0.4; cursor: not-allowed; }
   button.primary { background: var(--amber); color: #221a0f; font-weight: 600; }
+  button.view-tab { background: transparent; border-color: transparent; }
+  button.view-tab.active { background: var(--amber); color: #221a0f; font-weight: 600; }
   select {
     font: inherit;
     background: var(--shell-light);
@@ -142,23 +144,53 @@
     pointer-events: none;
   }
   #save-flash.show { opacity: 1; }
+
+  #links-view { max-width: 900px; margin: 0 auto; padding: 16px; }
+  #links-toolbar {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
+  }
+  #links-filter {
+    font: inherit; flex: 1; background: var(--shell-light); color: var(--cream);
+    border: 1px solid #0006; border-radius: 8px; padding: 8px 12px;
+  }
+  #links-summary { font-size: 13px; color: #c9bfae; white-space: nowrap; }
+  .link-row {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--shell); border-radius: 10px; padding: 10px 12px; margin-bottom: 6px;
+  }
+  .link-row .badge {
+    width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+  }
+  .link-row .badge.missing { background: var(--red); }
+  .link-row .badge.present { background: var(--green); }
+  .link-row .title { width: 260px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+  .link-row .title .year { color: #8a8072; font-size: 12px; }
+  .link-row input {
+    font: inherit; flex: 1; min-width: 0; background: var(--ink); color: var(--cream);
+    border: 1px solid #0006; border-radius: 6px; padding: 6px 10px; font-size: 13px;
+  }
+  .link-row input.missing { border-color: var(--red); }
+  .link-row button { flex-shrink: 0; padding: 6px 12px; font-size: 13px; }
 </style>
 </head>
 <body>
 
 <header>
   <h1>Morphinia Timing Tool</h1>
-  <button id="load-btn">Load CSV</button>
+  <button id="view-timer-btn" class="view-tab active">Timer</button>
+  <button id="view-links-btn" class="view-tab">Fix Links</button>
+  <button id="load-btn">Load a different file</button>
   <input id="file-input" type="file" accept=".csv" style="display:none" />
-  <select id="song-select" disabled><option>Load a CSV to begin</option></select>
+  <select id="song-select" disabled><option>Loading…</option></select>
   <span class="spacer"></span>
   <span id="progress"></span>
-  <button id="export-btn" class="primary" disabled>Export CSV</button>
+  <button id="export-btn" disabled>Download backup</button>
 </header>
 
-<div id="drop-zone">
-  <p><strong>Load data/timing-worksheet.csv</strong> to start timing lines.</p>
-  <p>Everything happens in your browser — nothing is uploaded anywhere. Progress autosaves to this browser as you go.</p>
+<div id="drop-zone" style="display:none">
+  <p><strong>Couldn't load data/timing-worksheet.csv from the server.</strong></p>
+  <p id="drop-zone-detail">Run the genius: build scripts first, or load a file manually below.</p>
+  <p><button id="drop-zone-load-btn">Load a CSV manually</button></p>
 </div>
 
 <main id="app" style="display:none">
@@ -184,6 +216,14 @@
   </div>
   <div id="line-list"></div>
 </main>
+
+<div id="links-view" style="display:none">
+  <div id="links-toolbar">
+    <input id="links-filter" type="text" placeholder="Filter songs…" />
+    <span id="links-summary"></span>
+  </div>
+  <div id="links-list"></div>
+</div>
 
 <div id="save-flash">saved</div>
 
@@ -241,13 +281,45 @@ function looksRtl(text) {
 }
 
 // ---------- Loading ----------
-document.getElementById("load-btn").addEventListener("click", () => document.getElementById("file-input").click());
+const SERVER_FILE_NAME = "timing-worksheet.csv";
+let songSelectWired = false;
+
+function openFilePicker() {
+  document.getElementById("file-input").click();
+}
+document.getElementById("load-btn").addEventListener("click", openFilePicker);
+document.getElementById("drop-zone-load-btn").addEventListener("click", openFilePicker);
 document.getElementById("file-input").addEventListener("change", async (e) => {
   const file = e.target.files[0];
   if (!file) return;
   const text = await file.text();
   loadCsvText(text, file.name);
 });
+
+// Loads straight from the server on open — no more picking the file by hand
+// every time. Falls back to the manual picker only if that fails (server has
+// no worksheet yet, or is unreachable).
+async function autoLoadFromServer() {
+  try {
+    // Relative, not "/api/worksheet" — this page can be served from a
+    // subpath (e.g. /lmorphiniya/timestamper/), and an absolute path would
+    // resolve against the domain root instead of wherever this page lives.
+    const res = await fetch("api/worksheet");
+    if (!res.ok) throw new Error(String(res.status));
+    loadCsvText(await res.text(), SERVER_FILE_NAME);
+  } catch (err) {
+    document.getElementById("drop-zone-detail").textContent =
+      err.message === "404"
+        ? "Run the genius: build scripts first, or load a file manually below."
+        : "Couldn't reach the server (" + err.message + ") — load a file manually below, or reload the page.";
+    document.getElementById("drop-zone").style.display = "block";
+  }
+}
+autoLoadFromServer();
+
+function countTimed(rows) {
+  return rows.filter((r) => r.timestamp).length;
+}
 
 function loadCsvText(text, name) {
   const rows = parseCsv(text);
@@ -258,24 +330,27 @@ function loadCsvText(text, name) {
     return obj;
   });
 
-  songs = new Map();
-  allRows.forEach((row, i) => {
-    if (!songs.has(row.song_title)) songs.set(row.song_title, []);
-    songs.get(row.song_title).push(i);
-  });
-
   storageKey = "morphinia-timer:" + name + ":" + allRows.length;
   const saved = localStorage.getItem(storageKey);
   if (saved) {
     try {
       const savedRows = JSON.parse(saved);
-      if (savedRows.length === allRows.length) {
-        if (confirm("Found saved progress for this file in this browser. Resume it?")) {
+      // Only offer to resume if the browser copy actually has more done than
+      // what just loaded — e.g. the server auto-save missed one. If the
+      // server's already caught up (the normal case), don't bother asking.
+      if (savedRows.length === allRows.length && countTimed(savedRows) > countTimed(allRows)) {
+        if (confirm("This browser has further progress saved than the server copy. Use the browser's version?")) {
           allRows = savedRows;
         }
       }
     } catch {}
   }
+
+  songs = new Map();
+  allRows.forEach((row, i) => {
+    if (!songs.has(row.song_title)) songs.set(row.song_title, []);
+    songs.get(row.song_title).push(i);
+  });
 
   document.getElementById("drop-zone").style.display = "none";
   document.getElementById("app").style.display = "grid";
@@ -289,7 +364,10 @@ function loadCsvText(text, name) {
     opt.value = title;
     select.appendChild(opt);
   }
-  select.addEventListener("change", () => selectSong(select.value));
+  if (!songSelectWired) {
+    select.addEventListener("change", () => selectSong(select.value));
+    songSelectWired = true;
+  }
 
   const firstIncomplete = [...songs.keys()].find((t) => songs.get(t).some((i) => !allRows[i].timestamp));
   selectSong(firstIncomplete ?? songs.keys().next().value);
@@ -481,15 +559,30 @@ function undoLastMark() {
   saveProgress();
 }
 
+function serializeCsv() {
+  return toCsv(COLS, allRows.map((r) => COLS.map((c) => r[c] ?? "")));
+}
+
+function flashSaved(label) {
+  const flash = document.getElementById("save-flash");
+  flash.textContent = label;
+  flash.classList.add("show");
+  setTimeout(() => flash.classList.remove("show"), 800);
+}
+
 let saveTimer = null;
 function saveProgress() {
   if (!storageKey) return;
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => {
+  saveTimer = setTimeout(async () => {
     localStorage.setItem(storageKey, JSON.stringify(allRows));
-    const flash = document.getElementById("save-flash");
-    flash.classList.add("show");
-    setTimeout(() => flash.classList.remove("show"), 800);
+
+    try {
+      const res = await fetch("api/worksheet", { method: "POST", body: serializeCsv() });
+      flashSaved(res.ok ? "saved" : "saved to browser only — server rejected the write");
+    } catch {
+      flashSaved("saved to browser only — server unreachable");
+    }
   }, 300);
 }
 
@@ -528,6 +621,7 @@ function isKey(e, code, key) {
 window.addEventListener("keydown", (e) => {
   const tag = document.activeElement.tagName;
   if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+  if (currentView !== "timer") return; // don't hijack Space etc. while fixing links
 
   if (isKey(e, "Space", " ")) { e.preventDefault(); markCurrentLine(); }
   else if (isKey(e, "Backspace", "Backspace")) { e.preventDefault(); undoLastMark(); }
@@ -536,11 +630,96 @@ window.addEventListener("keydown", (e) => {
   else if (isKey(e, "KeyK", "k")) { e.preventDefault(); document.getElementById("play-pause").click(); }
 });
 
-// ---------- Export ----------
+// ---------- Fix Links view ----------
+// Separate from timing: fixes missing or wrong youtube_url per song, since
+// not every Genius-sourced link is right (dead videos, embedding disabled,
+// or just the wrong upload). Same underlying data + save path as the timer.
+let currentView = "timer";
+
+function switchView(view) {
+  currentView = view;
+  document.getElementById("view-timer-btn").classList.toggle("active", view === "timer");
+  document.getElementById("view-links-btn").classList.toggle("active", view === "links");
+  document.getElementById("app").style.display = view === "timer" ? "grid" : "none";
+  document.getElementById("links-view").style.display = view === "links" ? "block" : "none";
+  document.getElementById("song-select").style.display = view === "timer" ? "" : "none";
+  if (view === "links") renderLinksPanel();
+}
+document.getElementById("view-timer-btn").addEventListener("click", () => switchView("timer"));
+document.getElementById("view-links-btn").addEventListener("click", () => switchView("links"));
+document.getElementById("links-filter").addEventListener("input", renderLinksPanel);
+
+function songYoutubeUrl(indices) {
+  return allRows[indices[0]].youtube_url;
+}
+
+function countMissingLinks() {
+  return [...songs.values()].filter((indices) => !songYoutubeUrl(indices)).length;
+}
+
+function updateLinksSummary() {
+  document.getElementById("links-summary").textContent = `${countMissingLinks()} of ${songs.size} songs missing a link`;
+}
+
+function renderLinksPanel() {
+  const filter = document.getElementById("links-filter").value.trim().toLowerCase();
+  const list = document.getElementById("links-list");
+  list.innerHTML = "";
+
+  const entries = [...songs.entries()]
+    .filter(([title]) => title.toLowerCase().includes(filter))
+    .sort((a, b) => {
+      const aMissing = !songYoutubeUrl(a[1]);
+      const bMissing = !songYoutubeUrl(b[1]);
+      if (aMissing !== bMissing) return aMissing ? -1 : 1;
+      return a[0].localeCompare(b[0]);
+    });
+
+  for (const [title, indices] of entries) {
+    const url = songYoutubeUrl(indices);
+    const year = allRows[indices[0]].year;
+
+    const row = document.createElement("div");
+    row.className = "link-row";
+    row.innerHTML =
+      `<span class="badge ${url ? "present" : "missing"}"></span>` +
+      `<span class="title">${escapeHtml(title)}${year ? ` <span class="year">${escapeHtml(year)}</span>` : ""}</span>` +
+      `<input type="text" value="${escapeHtml(url)}" placeholder="paste a youtube.com/watch?v=… link" class="${url ? "" : "missing"}" />` +
+      `<button type="button">Open ↗</button>`;
+
+    const input = row.querySelector("input");
+    const badge = row.querySelector(".badge");
+
+    input.addEventListener("change", () => {
+      const newUrl = input.value.trim();
+      setSongYoutubeUrl(indices, newUrl);
+      input.classList.toggle("missing", !newUrl);
+      badge.className = "badge " + (newUrl ? "present" : "missing");
+      updateLinksSummary();
+      saveProgress();
+    });
+
+    row.querySelector("button").addEventListener("click", () => {
+      const current = input.value.trim();
+      const target = current || `https://www.youtube.com/results?search_query=${encodeURIComponent(title + " L'Morphine")}`;
+      window.open(target, "_blank", "noopener");
+    });
+
+    list.appendChild(row);
+  }
+
+  updateLinksSummary();
+}
+
+function setSongYoutubeUrl(indices, url) {
+  for (const i of indices) allRows[i].youtube_url = url;
+}
+
+// ---------- Manual backup download ----------
+// Progress already auto-saves to the server after every mark — this is just
+// an extra local copy for peace of mind, not the primary save path anymore.
 document.getElementById("export-btn").addEventListener("click", () => {
-  const rows = allRows.map((r) => COLS.map((c) => r[c] ?? ""));
-  const csv = toCsv(COLS, rows);
-  const blob = new Blob([csv], { type: "text/csv" });
+  const blob = new Blob([serializeCsv()], { type: "text/csv" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = "timing-worksheet.csv";

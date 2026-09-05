@@ -11,8 +11,20 @@ trust). This doesn't guess; it just makes doing it by hand fast.
 npm run timer
 ```
 
-Opens at `http://localhost:4321`. Click **Load CSV** and pick
-`data/timing-worksheet.csv`.
+Opens at `http://localhost:4321`. Your browser will prompt for a
+username/password (real HTTP Basic Auth, enforced server-side — not a
+page-level prompt that viewing source would bypass). Default credentials,
+set in `.env`:
+
+```
+username: morphinia
+password: lmorphiniya4
+```
+
+Change them anytime by editing `TIMER_USERNAME` / `TIMER_PASSWORD` in `.env`
+and restarting the server. Leave both blank to run without protection.
+
+Once past the prompt, click **Load CSV** and pick `data/timing-worksheet.csv`.
 
 ## How it works
 
