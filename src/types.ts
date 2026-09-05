@@ -54,9 +54,11 @@ export interface UntimedHit {
 
 export type AnyHit = SearchHit | UntimedHit;
 
-export type SearchTier = "exact" | "untimed" | "partial";
+export type SearchTier = "exact" | "untimed" | "partial" | "suggestion";
 
 export interface SearchResponse {
   tier: SearchTier;
   hits: AnyHit[];
+  /** Set only when tier is "suggestion" — the closest real word by edit distance. */
+  suggestion?: string;
 }

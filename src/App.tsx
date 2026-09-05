@@ -69,7 +69,18 @@ function App() {
       )}
 
       {response && (
-        <ResultsList query={query} tier={response.tier} hits={response.hits} activeHit={activeHit} onPlay={setActiveHit} />
+        <ResultsList
+          query={query}
+          tier={response.tier}
+          hits={response.hits}
+          suggestion={response.suggestion}
+          activeHit={activeHit}
+          onPlay={setActiveHit}
+          onSuggestionClick={(word) => {
+            setQuery(word);
+            runSearch(word);
+          }}
+        />
       )}
 
       <footer className="mt-auto pt-10 text-center text-[11px] text-cream/30">

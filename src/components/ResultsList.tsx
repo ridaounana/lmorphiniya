@@ -5,11 +5,29 @@ interface ResultsListProps {
   query: string;
   tier: SearchTier;
   hits: AnyHit[];
+  suggestion?: string;
   activeHit: AnyHit | null;
   onPlay: (hit: AnyHit) => void;
+  onSuggestionClick: (word: string) => void;
 }
 
-export function ResultsList({ query, tier, hits, activeHit, onPlay }: ResultsListProps) {
+export function ResultsList({ query, tier, hits, suggestion, activeHit, onPlay, onSuggestionClick }: ResultsListProps) {
+  if (tier === "suggestion" && suggestion) {
+    return (
+      <div className="mx-auto mt-6 max-w-md text-center text-sm text-cream/60">
+        Nothing on any tape says "{query}". Did you mean{" "}
+        <button
+          type="button"
+          onClick={() => onSuggestionClick(suggestion)}
+          className="font-semibold text-amber underline underline-offset-2 hover:text-cream"
+        >
+          {suggestion}
+        </button>
+        ?
+      </div>
+    );
+  }
+
   if (hits.length === 0) {
     return (
       <div className="mx-auto mt-6 max-w-md text-center text-sm text-cream/50">
