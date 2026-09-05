@@ -36,15 +36,24 @@ export function ResultCard({ hit, active, onPlay }: ResultCardProps) {
         </button>
 
         {(song.album || song.geniusUrl) && (
-          // Sibling to the button, not nested inside it — an <a> can't
+          // Same row as the album text, but the button gets its own lane
+          // (flex-1, to the right of the text) rather than roaming across
+          // the text's own space — same line, no overlap either way.
+          // Sibling to the button above, not nested inside it: an <a> can't
           // legally live inside a <button>, and this one needs to be its
-          // own focusable/clickable element for the runaway joke to work.
-          <div className="flex items-center justify-between gap-2 px-4 pb-3">
-            <p className="min-w-0 truncate text-xs text-cream/40">
-              {song.album}
-              {song.year ? ` · ${song.year}` : ""}
-            </p>
-            {song.geniusUrl && <RunawayGeniusButton href={song.geniusUrl} />}
+          // own focusable/clickable element anyway.
+          <div className="flex items-center gap-2 px-4 pb-3">
+            {song.album && (
+              <p className="max-w-[55%] shrink-0 truncate text-xs text-cream/40">
+                {song.album}
+                {song.year ? ` · ${song.year}` : ""}
+              </p>
+            )}
+            {song.geniusUrl && (
+              <div className="relative h-6 flex-1">
+                <RunawayGeniusButton href={song.geniusUrl} />
+              </div>
+            )}
           </div>
         )}
       </div>
