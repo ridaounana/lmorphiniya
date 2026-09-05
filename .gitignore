@@ -1,0 +1,40 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Secrets
+.env
+
+# Fetched data (regenerate with the npm run genius:* scripts — see scripts/README.md)
+data/genius-catalog.json
+data/genius-catalog.csv
+data/lyrics-raw/
+data/song-details/
+
+# NOTE: data/timing-worksheet.csv is intentionally NOT ignored — once real
+# timestamps are in it, it's irreplaceable manual work, not regenerable cache.
+
+# Staging area for exports from tools/timer.html before they're folded into
+# data/timing-worksheet.csv
+out/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

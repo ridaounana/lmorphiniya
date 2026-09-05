@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Permanent Marker", cursive;
+  --font-sans: "Space Grotesk", system-ui, sans-serif;
+
+  --color-ink: #14100e;
+  --color-shell: #2b2420;
+  --color-shell-light: #3d332c;
+  --color-tape: #171310;
+  --color-cream: #f2e9d8;
+  --color-amber: #e8a33d;
+  --color-red: #e0473b;
+  --color-green: #3fae6a;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  margin: 0;
+  background: radial-gradient(circle at 50% -10%, #2a1f1a 0%, var(--color-ink) 55%, #0b0908 100%);
+  min-height: 100svh;
+  font-family: var(--font-sans);
+  color: var(--color-cream);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100svh;
+}
+
+@keyframes spin-idle {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes spin-burst {
+  to {
+    transform: rotate(1080deg);
+  }
+}
+
+.reel-idle {
+  animation: spin-idle 6s linear infinite;
+}
+
+.reel-burst {
+  animation: spin-burst 0.9s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes tape-flicker {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+.tape-led {
+  animation: tape-flicker 1.4s ease-in-out infinite;
+}

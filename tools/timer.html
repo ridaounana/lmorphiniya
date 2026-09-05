@@ -1,0 +1,551 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Morphinia Timing Tool</title>
+<style>
+  :root {
+    --ink: #14100e;
+    --shell: #2b2420;
+    --shell-light: #3d332c;
+    --cream: #f2e9d8;
+    --amber: #e8a33d;
+    --red: #e0473b;
+    --green: #3fae6a;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--ink);
+    color: var(--cream);
+    min-height: 100vh;
+  }
+  header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 16px;
+    background: var(--shell);
+    border-bottom: 1px solid #000;
+    flex-wrap: wrap;
+  }
+  header h1 { font-size: 16px; margin: 0; white-space: nowrap; }
+  header .spacer { flex: 1; }
+  button {
+    font: inherit;
+    background: var(--shell-light);
+    color: var(--cream);
+    border: 1px solid #0006;
+    border-radius: 8px;
+    padding: 8px 14px;
+    cursor: pointer;
+  }
+  button:hover { background: #4a3e34; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.primary { background: var(--amber); color: #221a0f; font-weight: 600; }
+  select {
+    font: inherit;
+    background: var(--shell-light);
+    color: var(--cream);
+    border: 1px solid #0006;
+    border-radius: 8px;
+    padding: 8px 10px;
+    max-width: 320px;
+  }
+  #progress { font-size: 13px; color: #c9bfae; white-space: nowrap; }
+  main {
+    display: grid;
+    grid-template-columns: 1fr 360px;
+    gap: 16px;
+    padding: 16px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+  @media (max-width: 860px) {
+    main { grid-template-columns: 1fr; }
+  }
+  #player-col { display: flex; flex-direction: column; gap: 14px; }
+  #player-wrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16/9;
+    background: #000;
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  #player-wrap iframe { width: 100%; height: 100%; border: 0; }
+  #empty-state {
+    display: flex; align-items: center; justify-content: center;
+    height: 100%; color: #8a8072; font-size: 14px; text-align: center; padding: 20px;
+  }
+  #line-display {
+    background: var(--shell);
+    border-radius: 10px;
+    padding: 20px;
+    text-align: center;
+  }
+  #line-display .ctx {
+    font-size: 14px;
+    color: #8a8072;
+    margin: 4px 0;
+    min-height: 20px;
+  }
+  #line-display .current {
+    font-size: 22px;
+    font-weight: 600;
+    margin: 10px 0;
+    line-height: 1.4;
+    min-height: 32px;
+  }
+  #line-display .current[dir="rtl"] { direction: rtl; }
+  #transport {
+    display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;
+  }
+  #transport .time { font-variant-numeric: tabular-nums; color: var(--amber); min-width: 4ch; }
+  #hint {
+    text-align: center; font-size: 12px; color: #8a8072;
+  }
+  #hint kbd {
+    background: var(--shell-light); border: 1px solid #0006; border-radius: 4px;
+    padding: 1px 6px; font-family: inherit;
+  }
+  #line-list {
+    background: var(--shell);
+    border-radius: 10px;
+    padding: 8px;
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+  .line-row {
+    display: flex; gap: 8px; align-items: baseline;
+    padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px;
+  }
+  .line-row:hover { background: var(--shell-light); }
+  .line-row.current { background: var(--amber); color: #221a0f; }
+  .line-row .t {
+    font-variant-numeric: tabular-nums; color: var(--green); min-width: 4ch; flex-shrink: 0;
+  }
+  .line-row.current .t { color: #221a0f; font-weight: 700; }
+  .line-row .t.empty { color: #6b6355; }
+  .line-row .txt { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #drop-zone {
+    max-width: 520px; margin: 60px auto; text-align: center;
+    border: 2px dashed var(--shell-light); border-radius: 12px; padding: 40px 20px;
+  }
+  #drop-zone p { color: #c9bfae; }
+  #save-flash {
+    position: fixed; bottom: 16px; right: 16px;
+    background: var(--green); color: #0d1f14; padding: 6px 14px; border-radius: 20px;
+    font-size: 12px; font-weight: 600; opacity: 0; transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  #save-flash.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Morphinia Timing Tool</h1>
+  <button id="load-btn">Load CSV</button>
+  <input id="file-input" type="file" accept=".csv" style="display:none" />
+  <select id="song-select" disabled><option>Load a CSV to begin</option></select>
+  <span class="spacer"></span>
+  <span id="progress"></span>
+  <button id="export-btn" class="primary" disabled>Export CSV</button>
+</header>
+
+<div id="drop-zone">
+  <p><strong>Load data/timing-worksheet.csv</strong> to start timing lines.</p>
+  <p>Everything happens in your browser — nothing is uploaded anywhere. Progress autosaves to this browser as you go.</p>
+</div>
+
+<main id="app" style="display:none">
+  <div id="player-col">
+    <div id="player-wrap"><div id="empty-state">Pick a song above</div></div>
+    <div id="line-display">
+      <div class="ctx" id="ctx-prev"></div>
+      <div class="current" id="ctx-current">—</div>
+      <div class="ctx" id="ctx-next"></div>
+    </div>
+    <div id="transport">
+      <button id="seek-back">« 3s</button>
+      <button id="play-pause">Play</button>
+      <button id="seek-fwd">3s »</button>
+      <span class="time" id="time-display">0:00</span>
+    </div>
+    <div id="hint">
+      <kbd>Space</kbd> mark line &amp; advance &nbsp;·&nbsp;
+      <kbd>Backspace</kbd> undo last mark &nbsp;·&nbsp;
+      <kbd>←</kbd>/<kbd>→</kbd> seek 3s &nbsp;·&nbsp;
+      <kbd>K</kbd> play/pause
+    </div>
+  </div>
+  <div id="line-list"></div>
+</main>
+
+<div id="save-flash">saved</div>
+
+<script>
+// ---------- CSV parse/serialize ----------
+function parseCsv(text) {
+  const rows = [];
+  let row = [], field = "", inQuotes = false, i = 0;
+  while (i < text.length) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i += 2; continue; }
+        inQuotes = false; i++; continue;
+      }
+      field += c; i++; continue;
+    }
+    if (c === '"') { inQuotes = true; i++; continue; }
+    if (c === ',') { row.push(field); field = ""; i++; continue; }
+    if (c === '\r') { i++; continue; }
+    if (c === '\n') { row.push(field); rows.push(row); row = []; field = ""; i++; continue; }
+    field += c; i++;
+  }
+  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+  return rows.filter((r) => r.length > 1 || r[0] !== "");
+}
+
+function csvCell(v) {
+  const s = String(v ?? "");
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+function toCsv(header, rows) {
+  return [header, ...rows].map((r) => r.map(csvCell).join(",")).join("\n") + "\n";
+}
+
+// ---------- State ----------
+const COLS = ["song_title", "album", "year", "youtube_url", "timestamp", "line_text", "line_translation", "line_transliteration"];
+let allRows = [];      // array of { song_title, album, ..., timestamp } objects, in original file order
+let songs = new Map(); // title -> array of indices into allRows
+let currentSong = null;
+let currentIdx = 0;    // position within songs.get(currentSong)
+let player = null;
+let ytReady = false;
+let storageKey = null;
+
+function extractVideoId(url) {
+  if (!url) return null;
+  const m = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+
+function looksRtl(text) {
+  return /[؀-ۿ]/.test(text);
+}
+
+// ---------- Loading ----------
+document.getElementById("load-btn").addEventListener("click", () => document.getElementById("file-input").click());
+document.getElementById("file-input").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const text = await file.text();
+  loadCsvText(text, file.name);
+});
+
+function loadCsvText(text, name) {
+  const rows = parseCsv(text);
+  const header = rows[0];
+  allRows = rows.slice(1).map((r) => {
+    const obj = {};
+    header.forEach((h, i) => (obj[h] = r[i] ?? ""));
+    return obj;
+  });
+
+  songs = new Map();
+  allRows.forEach((row, i) => {
+    if (!songs.has(row.song_title)) songs.set(row.song_title, []);
+    songs.get(row.song_title).push(i);
+  });
+
+  storageKey = "morphinia-timer:" + name + ":" + allRows.length;
+  const saved = localStorage.getItem(storageKey);
+  if (saved) {
+    try {
+      const savedRows = JSON.parse(saved);
+      if (savedRows.length === allRows.length) {
+        if (confirm("Found saved progress for this file in this browser. Resume it?")) {
+          allRows = savedRows;
+        }
+      }
+    } catch {}
+  }
+
+  document.getElementById("drop-zone").style.display = "none";
+  document.getElementById("app").style.display = "grid";
+  document.getElementById("export-btn").disabled = false;
+
+  const select = document.getElementById("song-select");
+  select.disabled = false;
+  select.innerHTML = "";
+  for (const title of songs.keys()) {
+    const opt = document.createElement("option");
+    opt.value = title;
+    select.appendChild(opt);
+  }
+  select.addEventListener("change", () => selectSong(select.value));
+
+  const firstIncomplete = [...songs.keys()].find((t) => songs.get(t).some((i) => !allRows[i].timestamp));
+  selectSong(firstIncomplete ?? songs.keys().next().value);
+  updateProgress();
+}
+
+// ---------- YouTube ----------
+let ytApiPromise = null;
+function loadYouTubeApi() {
+  if (ytApiPromise) return ytApiPromise;
+  ytApiPromise = new Promise((resolve, reject) => {
+    if (window.YT && window.YT.Player) return resolve();
+    const tag = document.createElement("script");
+    tag.src = "https://www.youtube.com/iframe_api";
+    document.head.appendChild(tag);
+    window.onYouTubeIframeAPIReady = () => resolve();
+    // If this never fires, youtube.com itself is unreachable from this
+    // browser (ad-blocker, privacy extension, firewall) — tell the user
+    // plainly instead of leaving them staring at a blank box.
+    setTimeout(() => reject(new Error("timeout")), 8000);
+  });
+  return ytApiPromise;
+}
+
+const YT_ERROR_MESSAGES = {
+  2: "Bad video link in the CSV — check the youtube_url for this song.",
+  5: "This browser's HTML5 player couldn't play this video.",
+  100: "Video not found (likely removed or made private) — needs a different youtube_url.",
+  101: "The uploader disabled embedding for this video — it can only be watched on youtube.com, so it can't be timed here. Needs a different youtube_url (a re-upload, official audio, etc).",
+  150: "The uploader disabled embedding for this video — it can only be watched on youtube.com, so it can't be timed here. Needs a different youtube_url (a re-upload, official audio, etc).",
+};
+
+// Destroys the current player object before anything wipes its DOM node out
+// from under it — without this, the next loadVideoById() reuses a reference
+// to an already-removed iframe (that's what threw the console warnings).
+function teardownPlayer() {
+  if (player) {
+    try { player.destroy(); } catch {}
+  }
+  player = null;
+  ytReady = false;
+}
+
+function showPlayerStatus(message) {
+  teardownPlayer();
+  document.getElementById("player-wrap").innerHTML = `<div id="empty-state">${escapeHtml(message)}</div>`;
+}
+
+async function ensurePlayer(videoId) {
+  try {
+    await loadYouTubeApi();
+  } catch {
+    showPlayerStatus(
+      "Couldn't reach youtube.com from this browser. If you have an ad-blocker or privacy extension, try allow-listing this page (or use a different browser) and reload.",
+    );
+    return;
+  }
+
+  if (!player) {
+    document.getElementById("player-wrap").innerHTML = '<div id="yt-target" style="width:100%;height:100%"></div>';
+    player = new YT.Player("yt-target", {
+      videoId,
+      playerVars: { playsinline: 1 },
+      events: {
+        onReady: () => { ytReady = true; },
+        // onReady only ever fires once per player object — a later
+        // loadVideoById() re-uses it, so onStateChange (fires per video) is
+        // the real per-video "safe to call getCurrentTime() now" signal.
+        onStateChange: () => { ytReady = true; },
+        onError: (e) => {
+          showPlayerStatus(YT_ERROR_MESSAGES[e.data] ?? `YouTube error ${e.data} — try a different youtube_url for this song.`);
+        },
+      },
+    });
+  } else {
+    // Not ready for the new video until its own onStateChange/onError
+    // fires — otherwise the interval below can poll a player that's
+    // mid-swap, which is exactly what threw the "not attached to DOM"
+    // console warnings during testing.
+    ytReady = false;
+    player.loadVideoById(videoId);
+  }
+}
+
+// ---------- Song / line rendering ----------
+function songTitleFor(indices) {
+  const row = allRows[indices[0]];
+  const done = indices.filter((i) => allRows[i].timestamp).length;
+  return `${row.song_title} (${done}/${indices.length})`;
+}
+
+function refreshSongSelectLabels() {
+  const select = document.getElementById("song-select");
+  [...select.options].forEach((opt) => {
+    opt.textContent = songTitleFor(songs.get(opt.value));
+  });
+}
+
+function selectSong(title) {
+  currentSong = title;
+  document.getElementById("song-select").value = title;
+  const indices = songs.get(title);
+  currentIdx = indices.findIndex((i) => !allRows[i].timestamp);
+  if (currentIdx === -1) currentIdx = 0;
+
+  const videoId = extractVideoId(allRows[indices[0]].youtube_url);
+  if (videoId) {
+    ensurePlayer(videoId);
+  } else {
+    showPlayerStatus("No youtube_url for this song yet — add one to the CSV, or skip it for now.");
+  }
+
+  renderAll();
+}
+
+function renderAll() {
+  refreshSongSelectLabels();
+  renderLineList();
+  renderCurrentLineDisplay();
+  updateProgress();
+}
+
+function renderLineList() {
+  const list = document.getElementById("line-list");
+  list.innerHTML = "";
+  const indices = songs.get(currentSong) ?? [];
+  indices.forEach((rowIdx, pos) => {
+    const row = allRows[rowIdx];
+    const div = document.createElement("div");
+    div.className = "line-row" + (pos === currentIdx ? " current" : "");
+    div.innerHTML =
+      `<span class="t ${row.timestamp ? "" : "empty"}">${row.timestamp || "--:--"}</span>` +
+      `<span class="txt">${escapeHtml(row.line_text)}</span>`;
+    div.addEventListener("click", () => { currentIdx = pos; renderAll(); });
+    list.appendChild(div);
+  });
+  const activeEl = list.children[currentIdx];
+  if (activeEl) activeEl.scrollIntoView({ block: "nearest" });
+}
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+function renderCurrentLineDisplay() {
+  const indices = songs.get(currentSong) ?? [];
+  const prevText = currentIdx > 0 ? allRows[indices[currentIdx - 1]].line_text : "";
+  const curRow = allRows[indices[currentIdx]];
+  const nextText = currentIdx < indices.length - 1 ? allRows[indices[currentIdx + 1]].line_text : "";
+
+  document.getElementById("ctx-prev").textContent = prevText;
+  document.getElementById("ctx-next").textContent = nextText;
+  const cur = document.getElementById("ctx-current");
+  cur.textContent = curRow ? curRow.line_text : "(song complete)";
+  cur.setAttribute("dir", curRow && looksRtl(curRow.line_text) ? "rtl" : "ltr");
+}
+
+function updateProgress() {
+  const total = allRows.length;
+  const done = allRows.filter((r) => r.timestamp).length;
+  document.getElementById("progress").textContent = `${done} / ${total} lines timed`;
+}
+
+// ---------- Marking ----------
+function formatTime(seconds) {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+function markCurrentLine() {
+  if (!player || !ytReady) return;
+  const indices = songs.get(currentSong) ?? [];
+  if (currentIdx >= indices.length) return;
+  let t;
+  try { t = player.getCurrentTime(); } catch { return; }
+  allRows[indices[currentIdx]].timestamp = formatTime(t);
+  if (currentIdx < indices.length - 1) currentIdx++;
+  renderAll();
+  saveProgress();
+}
+
+function undoLastMark() {
+  if (currentIdx === 0) return;
+  const indices = songs.get(currentSong) ?? [];
+  currentIdx--;
+  allRows[indices[currentIdx]].timestamp = "";
+  renderAll();
+  saveProgress();
+}
+
+let saveTimer = null;
+function saveProgress() {
+  if (!storageKey) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    localStorage.setItem(storageKey, JSON.stringify(allRows));
+    const flash = document.getElementById("save-flash");
+    flash.classList.add("show");
+    setTimeout(() => flash.classList.remove("show"), 800);
+  }, 300);
+}
+
+// ---------- Transport ----------
+// ytReady-gated and try/caught: the player object can briefly exist but not
+// yet be responsive right as a video is swapped in (see teardownPlayer).
+function seekBy(deltaSeconds) {
+  if (!player || !ytReady) return;
+  try { player.seekTo(player.getCurrentTime() + deltaSeconds, true); } catch {}
+}
+
+document.getElementById("play-pause").addEventListener("click", () => {
+  if (!player || !ytReady) return;
+  try {
+    if (player.getPlayerState() === 1) player.pauseVideo(); else player.playVideo();
+  } catch {}
+});
+document.getElementById("seek-back").addEventListener("click", () => seekBy(-3));
+document.getElementById("seek-fwd").addEventListener("click", () => seekBy(3));
+
+setInterval(() => {
+  if (!player || !ytReady) return;
+  try {
+    document.getElementById("time-display").textContent = formatTime(player.getCurrentTime());
+    document.getElementById("play-pause").textContent = player.getPlayerState() === 1 ? "Pause" : "Play";
+  } catch {}
+}, 200);
+
+// ---------- Keyboard ----------
+// Checks both `code` and `key` — some input paths (on-screen keyboards,
+// certain remote-input/automation setups) only populate one of the two.
+function isKey(e, code, key) {
+  return e.code === code || e.key === key || e.key?.toLowerCase() === key?.toLowerCase();
+}
+
+window.addEventListener("keydown", (e) => {
+  const tag = document.activeElement.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+  if (isKey(e, "Space", " ")) { e.preventDefault(); markCurrentLine(); }
+  else if (isKey(e, "Backspace", "Backspace")) { e.preventDefault(); undoLastMark(); }
+  else if (isKey(e, "ArrowLeft", "ArrowLeft")) { e.preventDefault(); seekBy(-3); }
+  else if (isKey(e, "ArrowRight", "ArrowRight")) { e.preventDefault(); seekBy(3); }
+  else if (isKey(e, "KeyK", "k")) { e.preventDefault(); document.getElementById("play-pause").click(); }
+});
+
+// ---------- Export ----------
+document.getElementById("export-btn").addEventListener("click", () => {
+  const rows = allRows.map((r) => COLS.map((c) => r[c] ?? ""));
+  const csv = toCsv(COLS, rows);
+  const blob = new Blob([csv], { type: "text/csv" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "timing-worksheet.csv";
+  a.click();
+});
+</script>
+</body>
+</html>

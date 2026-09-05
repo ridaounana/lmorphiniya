@@ -1,0 +1,39 @@
+{
+  "name": "morphinia",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "genius:search": "node scripts/genius-search.js",
+    "genius:songs": "node scripts/genius-songs.js",
+    "genius:song": "node scripts/genius-song.js",
+    "genius:artist": "node scripts/genius-artist.js",
+    "genius:csv": "node scripts/catalog-to-csv.js",
+    "genius:lyrics": "node scripts/genius-lyrics.js",
+    "genius:details": "node scripts/genius-details.js",
+    "genius:build-csv": "node scripts/build-timing-csv.js",
+    "timer": "node scripts/timer-server.js",
+    "build:songs": "node scripts/build-song-data.js",
+    "build:all-lyrics": "node scripts/build-all-lyrics.js"
+  },
+  "dependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "@vitejs/plugin-react": "^6.1.0",
+    "cheerio": "^1.2.0",
+    "oxlint": "^1.79.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.2"
+  }
+}

@@ -1,0 +1,73 @@
+{
+  "info": {
+    "name": "Morphinia — Genius API",
+    "description": "Discovery calls against the Genius API for L'Morphine's catalog. Auth is Bearer via the {{genius_token}} collection variable — paste your Client Access Token there, never into a request body or URL.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [{ "key": "token", "value": "{{genius_token}}", "type": "string" }]
+  },
+  "variable": [
+    { "key": "base_url", "value": "https://api.genius.com", "type": "string" },
+    { "key": "genius_token", "value": "", "type": "secret" },
+    { "key": "artist_id", "value": "", "type": "string" },
+    { "key": "song_id", "value": "", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "1. Search — find the artist id",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/search?q=L'Morphine",
+          "host": ["{{base_url}}"],
+          "path": ["search"],
+          "query": [{ "key": "q", "value": "L'Morphine" }]
+        },
+        "description": "Look through response.hits for the entry whose primary_artist is really him, then copy primary_artist.id into the artist_id variable. If nothing looks right, edit the q value and resend (try just \"Morphine\", or the exact spelling from his genius.com profile URL)."
+      }
+    },
+    {
+      "name": "2. Artist — profile by id",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/artists/{{artist_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["artists", "{{artist_id}}"]
+        },
+        "description": "Sanity check that artist_id is correct — confirms name, image, genius url."
+      }
+    },
+    {
+      "name": "3. Artist songs — paginated catalog",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/artists/{{artist_id}}/songs?per_page=50&page=1&sort=title",
+          "host": ["{{base_url}}"],
+          "path": ["artists", "{{artist_id}}", "songs"],
+          "query": [
+            { "key": "per_page", "value": "50" },
+            { "key": "page", "value": "1" },
+            { "key": "sort", "value": "title" }
+          ]
+        },
+        "description": "One page of the artist's songs. Check response.next_page — if it's not null, bump the page query param and resend to get the rest. Grab any one song's id for request 4."
+      }
+    },
+    {
+      "name": "4. Song — full details by id",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{base_url}}/songs/{{song_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["songs", "{{song_id}}"]
+        },
+        "description": "Richest metadata for one song (album, writers, release date, etc). Does NOT include lyrics text — that only lives on the genius.com page at response.song.url."
+      }
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "morphinia-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 5173,
+      "autoPort": true
+    },
+    {
+      "name": "morphinia-timer",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "timer"],
+      "port": 4321,
+      "autoPort": true
+    }
+  ]
+}
