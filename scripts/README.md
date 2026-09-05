@@ -37,7 +37,24 @@ npm run genius:build-csv    # -> data/timing-worksheet.csv
 year, lyric text, and (where Genius had one) the YouTube link, all pre-filled.
 What's left for a human: the `timestamp` column always (Genius has no concept
 of audio timing), and `youtube_url` on whatever rows Genius didn't have a
-link for. See [data/README.md](../data/README.md).
+link for. See [data/README.md](../data/README.md) and, for actually timing
+lines, [tools/README.md](../tools/README.md).
+
+## Turning the worksheet into what the app runs on
+
+```bash
+npm run build:songs       # data/timing-worksheet.csv -> public/data/songs.json (timed lines only)
+npm run build:all-lyrics  # data/lyrics-raw/*.json -> public/data/allLyrics.json (everything scraped, timed or not)
+```
+
+Both are gitignored, generated files, fetched by the app at runtime (see the
+root [README.md](../README.md#how-data-gets-from-timed-in-the-tool-to-live-on-the-site))
+rather than bundled — that's what lets `scripts/timer-server.js` regenerate
+`songs.json` itself after every save in prod, so a song shows up on the live
+site right after it's timed, no rebuild needed. `build-song-data.js` and
+`timer-server.js` share the actual CSV -> songs transform from
+`scripts/lib/build-songs.js`, so the manual and automatic paths can't drift
+out of sync with each other.
 
 Other commands:
 

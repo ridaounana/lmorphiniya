@@ -1,10 +1,13 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 
 // Turns every already-scraped song (data/lyrics-raw/*.json — 263 songs, no
-// timestamps needed) into src/data/allLyrics.json: a full-text index so a
-// word can be found ("it's in this song") even before that song has been
-// timed. This is deliberately separate from src/data/songs.json, which
-// stays "only what's precisely timed" for the real search+jump experience.
+// timestamps needed) into public/data/allLyrics.json — fetched by the app at
+// runtime, not bundled. A full-text index so a word can be found ("it's in
+// this song") even before that song has been timed. Deliberately separate
+// from songs.json, which stays "only what's precisely timed" for the real
+// search+jump experience. Unlike songs.json, nothing regenerates this one
+// automatically — it only changes when the scraped catalog itself grows, a
+// separate, much rarer step (see scripts/README.md).
 
 const SECTION_TAG_RE = /^\[.+\]$/;
 const GENIUS_CREDIT_LINE_RE = /^paroles de .*morphine/i;
@@ -51,7 +54,8 @@ for (const song of catalog) {
   });
 }
 
-writeFileSync("src/data/allLyrics.json", JSON.stringify(allLyrics, null, 2));
+mkdirSync("public/data", { recursive: true });
+writeFileSync("public/data/allLyrics.json", JSON.stringify(allLyrics));
 
 const totalLines = allLyrics.reduce((sum, s) => sum + s.lines.length, 0);
-console.log(`Wrote src/data/allLyrics.json: ${allLyrics.length} song(s), ${totalLines} line(s) — full-text, no timestamps.`);
+console.log(`Wrote public/data/allLyrics.json: ${allLyrics.length} song(s), ${totalLines} line(s) — full-text, no timestamps.`);

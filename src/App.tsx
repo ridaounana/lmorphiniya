@@ -1,15 +1,26 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Cassette } from "./components/Cassette";
 import { ResultsList } from "./components/ResultsList";
 import { YouTubePlayer } from "./components/YouTubePlayer";
-import { allLyrics } from "./data/allLyrics";
-import { songs } from "./data/songs";
+import { loadAllLyrics, loadSongs } from "./lib/loadData";
 import { buildIndex, buildUntimedIndex, randomWord, search } from "./lib/search";
-import type { AnyHit, SearchResponse } from "./types";
+import type { AnyHit, SearchResponse, Song, UntimedSong } from "./types";
 
 function App() {
-  const timedIndex = useMemo(() => buildIndex(songs), []);
-  const untimedIndex = useMemo(() => buildUntimedIndex(allLyrics), []);
+  const [songs, setSongs] = useState<Song[]>([]);
+  const [allLyrics, setAllLyrics] = useState<UntimedSong[]>([]);
+  const [dataReady, setDataReady] = useState(false);
+
+  useEffect(() => {
+    Promise.all([loadSongs(), loadAllLyrics()]).then(([songsData, lyricsData]) => {
+      setSongs(songsData);
+      setAllLyrics(lyricsData);
+      setDataReady(true);
+    });
+  }, []);
+
+  const timedIndex = useMemo(() => buildIndex(songs), [songs]);
+  const untimedIndex = useMemo(() => buildUntimedIndex(allLyrics), [allLyrics]);
   const [query, setQuery] = useState("");
   const [response, setResponse] = useState<SearchResponse | null>(null);
   const [activeHit, setActiveHit] = useState<AnyHit | null>(null);
@@ -62,7 +73,9 @@ function App() {
       )}
 
       <footer className="mt-auto pt-10 text-center text-[11px] text-cream/30">
-        {songs.length} song{songs.length === 1 ? "" : "s"} timed so far, {allLyrics.length} more with lyrics in
+        {dataReady
+          ? `${songs.length} song${songs.length === 1 ? "" : "s"} timed so far, ${allLyrics.length} more with lyrics in`
+          : "loading the catalog…"}
       </footer>
     </div>
   );

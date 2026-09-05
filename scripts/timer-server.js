@@ -1,9 +1,10 @@
 import { createServer } from "node:http";
-import { readFile, writeFile, copyFile } from "node:fs/promises";
+import { readFile, writeFile, copyFile, mkdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { extname, join } from "node:path";
+import { extname, join, dirname } from "node:path";
 import { timingSafeEqual } from "node:crypto";
 import { loadEnv } from "./lib/env.js";
+import { buildSongsFromWorksheet } from "./lib/build-songs.js";
 
 loadEnv();
 
@@ -11,6 +12,11 @@ const PORT = Number(process.env.PORT) || 4321;
 const ROOT = "tools";
 const WORKSHEET_PATH = "data/timing-worksheet.csv";
 const WORKSHEET_BACKUP_PATH = "data/timing-worksheet.csv.bak";
+const GENIUS_CATALOG_PATH = "data/genius-catalog.json";
+// Locally this is the app's own public/data (Vite serves + bundles it from
+// there); in prod .env points this one level up, into the main app's static
+// tree (a sibling of this script's own directory) — see scripts/README.md.
+const SONGS_OUTPUT_PATH = process.env.SONGS_OUTPUT_PATH || "public/data/songs.json";
 const EXPECTED_HEADER =
   "song_title,album,year,youtube_url,timestamp,line_text,line_translation,line_transliteration";
 const USERNAME = process.env.TIMER_USERNAME ?? "";
@@ -68,6 +74,23 @@ async function handleGetWorksheet(res) {
   }
 }
 
+// This is the fix for the recurring "I timed it in prod but the site still
+// doesn't show it" problem: the live app fetches songs.json at runtime
+// (see src/lib/loadData.ts) instead of having it baked into the JS bundle,
+// so regenerating it here — right after every save, on the same box — is
+// enough on its own. No local rebuild, no redeploy, no separate step to
+// remember.
+async function regenerateSongsJson(csvText) {
+  const catalog = existsSync(GENIUS_CATALOG_PATH)
+    ? JSON.parse(await readFile(GENIUS_CATALOG_PATH, "utf8"))
+    : [];
+  const songs = buildSongsFromWorksheet(csvText, catalog);
+
+  await mkdir(dirname(SONGS_OUTPUT_PATH), { recursive: true });
+  await writeFile(SONGS_OUTPUT_PATH, JSON.stringify(songs));
+  return songs.length;
+}
+
 async function handleSaveWorksheet(req, res) {
   const body = await readBody(req);
 
@@ -83,8 +106,18 @@ async function handleSaveWorksheet(req, res) {
     await copyFile(WORKSHEET_PATH, WORKSHEET_BACKUP_PATH);
   }
   await writeFile(WORKSHEET_PATH, body, "utf8");
-  res.writeHead(200, { "Content-Type": "text/plain" });
-  res.end("saved");
+
+  try {
+    const songCount = await regenerateSongsJson(body);
+    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.end(`saved (${songCount} song(s) live)`);
+  } catch (err) {
+    // The worksheet itself is safely saved either way — only the derived
+    // songs.json regeneration failed, so say so plainly rather than a bare
+    // "saved" that would hide a real sync problem.
+    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.end(`saved, but rebuilding songs.json failed: ${err.message}`);
+  }
 }
 
 const server = createServer(async (req, res) => {

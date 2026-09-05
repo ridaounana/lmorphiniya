@@ -56,6 +56,10 @@
     padding: 8px 10px;
     max-width: 320px;
   }
+  #song-filter {
+    font: inherit; width: 150px; background: var(--shell-light); color: var(--cream);
+    border: 1px solid #0006; border-radius: 8px; padding: 8px 10px;
+  }
   #progress { font-size: 13px; color: #c9bfae; white-space: nowrap; }
   main {
     display: grid;
@@ -117,21 +121,32 @@
     background: var(--shell);
     border-radius: 10px;
     padding: 8px;
-    max-height: 70vh;
+    height: 70vh;
+    min-height: 160px;
+    max-height: 90vh;
     overflow-y: auto;
+    /* Native drag handle, bottom-right corner — height only, this is a
+       single column so there's no meaningful width to resize independently. */
+    resize: vertical;
   }
   .line-row {
-    display: flex; gap: 8px; align-items: baseline;
+    display: flex; gap: 8px; align-items: flex-start;
     padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px;
   }
   .line-row:hover { background: var(--shell-light); }
   .line-row.current { background: var(--amber); color: #221a0f; }
   .line-row .t {
     font-variant-numeric: tabular-nums; color: var(--green); min-width: 4ch; flex-shrink: 0;
+    padding-top: 1px; /* nudges the timestamp back onto the text's first line now that both wrap */
   }
   .line-row.current .t { color: #221a0f; font-weight: 700; }
   .line-row .t.empty { color: #6b6355; }
-  .line-row .txt { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .line-row .txt {
+    flex: 1; min-width: 0;
+    overflow-wrap: break-word;
+    white-space: normal;
+    line-height: 1.4;
+  }
   #drop-zone {
     max-width: 520px; margin: 60px auto; text-align: center;
     border: 2px dashed var(--shell-light); border-radius: 12px; padding: 40px 20px;
@@ -147,15 +162,15 @@
 
   #links-view { max-width: 900px; margin: 0 auto; padding: 16px; }
   #links-toolbar {
-    display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
+    display: flex; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;
   }
   #links-filter {
-    font: inherit; flex: 1; background: var(--shell-light); color: var(--cream);
+    font: inherit; flex: 1; min-width: 160px; background: var(--shell-light); color: var(--cream);
     border: 1px solid #0006; border-radius: 8px; padding: 8px 12px;
   }
   #links-summary { font-size: 13px; color: #c9bfae; white-space: nowrap; }
   .link-row {
-    display: flex; align-items: center; gap: 10px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
     background: var(--shell); border-radius: 10px; padding: 10px 12px; margin-bottom: 6px;
   }
   .link-row .badge {
@@ -163,17 +178,20 @@
   }
   .link-row .badge.missing { background: var(--red); }
   .link-row .badge.present { background: var(--green); }
-  .link-row .title { width: 260px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+  .link-row .title {
+    flex: 1 1 200px; min-width: 0; max-width: 100%;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px;
+  }
   .link-row .title .year { color: #8a8072; font-size: 12px; }
   .link-row input {
-    font: inherit; flex: 1; min-width: 0; background: var(--ink); color: var(--cream);
+    font: inherit; flex: 2 1 180px; min-width: 0; background: var(--ink); color: var(--cream);
     border: 1px solid #0006; border-radius: 6px; padding: 6px 10px; font-size: 13px;
   }
   .link-row input.missing { border-color: var(--red); }
   .link-row button { flex-shrink: 0; padding: 6px 12px; font-size: 13px; }
 </style>
 </head>
-<body>
+<body tabindex="-1" style="outline:none">
 
 <header>
   <h1>Morphinia Timing Tool</h1>
@@ -181,6 +199,7 @@
   <button id="view-links-btn" class="view-tab">Fix Links</button>
   <button id="load-btn">Load a different file</button>
   <input id="file-input" type="file" accept=".csv" style="display:none" />
+  <input id="song-filter" type="text" placeholder="Search songs…" />
   <select id="song-select" disabled><option>Loading…</option></select>
   <span class="spacer"></span>
   <span id="progress"></span>
@@ -356,16 +375,10 @@ function loadCsvText(text, name) {
   document.getElementById("app").style.display = "grid";
   document.getElementById("export-btn").disabled = false;
 
-  const select = document.getElementById("song-select");
-  select.disabled = false;
-  select.innerHTML = "";
-  for (const title of songs.keys()) {
-    const opt = document.createElement("option");
-    opt.value = title;
-    select.appendChild(opt);
-  }
+  document.getElementById("song-select").disabled = false;
+  renderSongOptions(document.getElementById("song-filter").value);
   if (!songSelectWired) {
-    select.addEventListener("change", () => selectSong(select.value));
+    document.getElementById("song-select").addEventListener("change", (e) => selectSong(e.target.value));
     songSelectWired = true;
   }
 
@@ -430,7 +443,10 @@ async function ensurePlayer(videoId) {
     document.getElementById("player-wrap").innerHTML = '<div id="yt-target" style="width:100%;height:100%"></div>';
     player = new YT.Player("yt-target", {
       videoId,
-      playerVars: { playsinline: 1 },
+      // disablekb stops YouTube's own player from reacting to Space/arrows
+      // at all — without it, Space toggles play/pause *inside* the iframe
+      // in addition to (or instead of) marking a line here.
+      playerVars: { playsinline: 1, disablekb: 1 },
       events: {
         onReady: () => { ytReady = true; },
         // onReady only ever fires once per player object — a later
@@ -459,12 +475,43 @@ function songTitleFor(indices) {
   return `${row.song_title} (${done}/${indices.length})`;
 }
 
-function refreshSongSelectLabels() {
+// Sorted alphabetically and narrowed by the search box — with 250+ songs in
+// upload order, finding one by scrolling an unsorted dropdown was the
+// original complaint. Rebuilds the <option> list (rather than hiding some
+// via CSS) since browsers render a native <select>'s popup from its actual
+// DOM options, not from CSS visibility on them.
+function renderSongOptions(filterText = "") {
   const select = document.getElementById("song-select");
-  [...select.options].forEach((opt) => {
-    opt.textContent = songTitleFor(songs.get(opt.value));
-  });
+  const query = filterText.trim().toLowerCase();
+  const titles = [...songs.keys()]
+    .filter((t) => t.toLowerCase().includes(query))
+    .sort((a, b) => a.localeCompare(b));
+
+  select.innerHTML = "";
+  for (const title of titles) {
+    const opt = document.createElement("option");
+    opt.value = title;
+    opt.textContent = songTitleFor(songs.get(title));
+    select.appendChild(opt);
+  }
+
+  if (currentSong && titles.includes(currentSong)) select.value = currentSong;
 }
+
+function refreshSongSelectLabels() {
+  renderSongOptions(document.getElementById("song-filter").value);
+}
+
+document.getElementById("song-filter").addEventListener("input", (e) => renderSongOptions(e.target.value));
+document.getElementById("song-filter").addEventListener("keydown", (e) => {
+  if (e.key !== "Enter") return;
+  e.preventDefault();
+  const firstMatch = document.getElementById("song-select").options[0];
+  if (firstMatch) {
+    selectSong(firstMatch.value);
+    e.target.blur(); // hands keyboard focus back so Space etc. resume normally
+  }
+});
 
 function selectSong(title) {
   currentSong = title;
@@ -579,9 +626,14 @@ function saveProgress() {
 
     try {
       const res = await fetch("api/worksheet", { method: "POST", body: serializeCsv() });
-      flashSaved(res.ok ? "saved" : "saved to browser only — server rejected the write");
+      const text = await res.text();
+      // Server response says e.g. "saved (37 song(s) live)" on success, or
+      // spells out a songs.json regeneration failure — surface it as-is
+      // rather than collapsing everything to a bare "saved", since that
+      // regeneration step is what actually makes a song show up on the site.
+      flashSaved(res.ok ? text : "browser only — server rejected the write");
     } catch {
-      flashSaved("saved to browser only — server unreachable");
+      flashSaved("browser only — server unreachable");
     }
   }, 300);
 }
@@ -610,6 +662,23 @@ setInterval(() => {
     document.getElementById("play-pause").textContent = player.getPlayerState() === 1 ? "Pause" : "Play";
   } catch {}
 }, 200);
+
+// ---------- Reclaim focus from the YouTube iframe ----------
+// disablekb stops YouTube from *acting* on a keypress, but if the iframe
+// still holds keyboard focus (e.g. after clicking the video to pause it by
+// mouse), keydown events go to that cross-origin document and never reach
+// this page's listener at all — Space would silently do nothing rather than
+// mark a line. The parent window firing "blur" is the one signal available
+// for "focus just left this page", including into a cross-origin iframe;
+// pulling it back to <body> (tabindex="-1" below makes that legal) restores
+// normal Space/Backspace/arrow handling on the very next keypress.
+window.addEventListener("blur", () => {
+  setTimeout(() => {
+    if (document.activeElement?.tagName === "IFRAME") {
+      document.body.focus();
+    }
+  }, 0);
+});
 
 // ---------- Keyboard ----------
 // Checks both `code` and `key` — some input paths (on-screen keyboards,
